@@ -1,36 +1,55 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Colowo
 
-## Getting Started
+Cooperative records management: member register, monthly bank deduction imports,
+savings and loan ledgers, interest runs and reports. Next.js + PostgreSQL.
 
-First, run the development server:
+See [`docs/PLAN.md`](docs/PLAN.md) for decisions, milestones and open questions.
+
+## Run locally
+
+Requires Node 20+ and PostgreSQL 15+.
 
 ```bash
+npm install
+cp .env.example .env.local   # then set DATABASE_URL and SESSION_SECRET
+npm run db:migrate
+npm run db:seed              # demo logins + ~520 fake members (never in production)
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Demo logins after seeding:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Login | Password | Role |
+|---|---|---|
+| admin@colowo.local | Colowo!2026 | Admin |
+| finance@colowo.local | Colowo!2026 | Finance officer |
+| board@colowo.local | Colowo!2026 | Viewer |
+| CLW00001 | Member!2026 | Member (must change password) |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Tests
 
-## Learn More
+Tests run against a separate database (`TEST_DATABASE_URL`, default
+`postgres://postgres@localhost:5433/colowo_test`), which is wiped on each run.
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm test
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Deploy (Vercel + Neon)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Create a Neon project; copy the **pooled** connection string.
+2. Import the repo in Vercel; set `DATABASE_URL`, `SESSION_SECRET` (`openssl rand -base64 48`) and `MEMBER_NO_PREFIX`.
+3. Run `npm run db:migrate` against the Neon database (locally with its URL in `.env.local`, or from CI).
+4. Create the first admin with a one-off script — do not run the demo seed in production.
 
-## Deploy on Vercel
+## Layout
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+drizzle/            SQL migrations (generated + hand-written integrity triggers)
+scripts/            migrate, seed
+src/db/             schema and connection
+src/lib/            pure helpers: money, formatting, normalisation, permissions
+src/server/         business logic (members, auth, audit) — all writes go through here
+src/app/            pages and server actions
+tests/              vitest (unit + database)
+```
