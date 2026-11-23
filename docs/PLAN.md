@@ -41,8 +41,12 @@ the ledger schema, the bank-file import logic, migration plan and data problems 
 ## Milestones
 
 1. **Foundation — done:** auth, roles, audit log, member register (create/edit/search, suspend/exit, duplicate checks), member self-service page, seed data, tests.
-2. Deduction import pipeline (needs the sample bank file).
-3. Savings ledger, balances, passbook, member statement.
+2. **Deduction import — done:** Kaduna payroll reader (control totals, period check), validation codes,
+   review screen (correct / skip / re-check), one-step commit, late posting of fixed rows, Excel status report,
+   original file kept.
+3. **Savings ledger — done:** append-only ledger with DB-enforced reversals, manual contributions/withdrawals/
+   adjustments, yearly passbook with earnings (matches the cooperative's sheet to the kobo), member self-view.
+   Still to do: PDF statement.
 4. Loans.
 5. Interest runs.
 6. Reports + Excel/PDF export.

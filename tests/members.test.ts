@@ -1,9 +1,10 @@
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db, pool } from "@/db";
 import { auditLog, members } from "@/db/schema";
 import { SYSTEM } from "@/server/audit";
 import { DomainError } from "@/server/errors";
+import { resetDb } from "./helpers";
 import { changeMemberStatus, createMember, updateMember } from "@/server/members";
 
 const actor = SYSTEM;
@@ -20,13 +21,7 @@ async function expectCode(p: Promise<unknown>, code: string) {
   await expect(p).rejects.toSatisfy((e) => e instanceof DomainError && e.code === code);
 }
 
-beforeAll(async () => {
-  await db.execute(sql`alter table members disable trigger members_no_delete`);
-  await db.execute(sql`alter table audit_log disable trigger user`);
-  await db.execute(sql`truncate audit_log, members restart identity cascade`);
-  await db.execute(sql`alter table audit_log enable trigger user`);
-  await db.execute(sql`alter table members enable trigger members_no_delete`);
-});
+beforeAll(resetDb);
 afterAll(() => pool.end());
 
 describe("member IDs", () => {

@@ -57,7 +57,9 @@ export function MemberForm({ action, initial, submitLabel, readOnly }: Props) {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">{field("fullName", "Full name", { required: true })}</div>
-        {field("employeeNo", "Employee number (as on bank file)")}
+        {field("employeeNo", "Employment number (bank file, e.g. EMP0013145)")}
+        {field("verificationNo", "Verification number (bank file)")}
+        {field("fileNo", "File number (old deduction record)")}
         {field("dateJoined", "Date joined", { type: "date", required: true })}
         {field("phone", "Phone", { type: "tel", placeholder: "0803 123 4567" })}
         {field("email", "Email", { type: "email" })}

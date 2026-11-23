@@ -15,6 +15,20 @@
       "when": 1795109627798,
       "tag": "0001_integrity_triggers",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795439611699,
+      "tag": "0002_imports_and_savings",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1795439612608,
+      "tag": "0003_savings_integrity",
+      "breakpoints": true
     }
   ]
 }

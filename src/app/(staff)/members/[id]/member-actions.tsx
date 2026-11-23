@@ -59,3 +59,66 @@ export function LoginForm({ action }: { action: Action }) {
     </form>
   );
 }
+
+export function ManualEntryForm({
+  action,
+  canAdjust,
+  defaultPeriod,
+  today,
+}: {
+  action: Action;
+  canAdjust: boolean;
+  defaultPeriod: string;
+  today: string;
+}) {
+  const [state, formAction, pending] = useActionState(action, {});
+  return (
+    <form action={formAction} className="grid gap-3 sm:grid-cols-2" key={state.at ?? 0}>
+      {state.error && <div className="sm:col-span-2"><Alert>{state.error}</Alert></div>}
+      {state.success && <div className="sm:col-span-2"><Alert kind="success">{state.success}</Alert></div>}
+      <div>
+        <label className="label" htmlFor="type">Type</label>
+        <select id="type" name="type" className="input">
+          <option value="contribution">Contribution (cash / transfer)</option>
+          <option value="withdrawal">Withdrawal</option>
+          {canAdjust && <option value="adjustment_credit">Adjustment — add</option>}
+          {canAdjust && <option value="adjustment_debit">Adjustment — deduct</option>}
+        </select>
+      </div>
+      <div>
+        <label className="label" htmlFor="amount">Amount (₦)</label>
+        <input id="amount" name="amount" inputMode="decimal" className="input" required />
+      </div>
+      <div>
+        <label className="label" htmlFor="period">Month it belongs to</label>
+        <input id="period" name="period" type="month" defaultValue={defaultPeriod} className="input" required />
+      </div>
+      <div>
+        <label className="label" htmlFor="txnDate">Date received / paid</label>
+        <input id="txnDate" name="txnDate" type="date" defaultValue={today} max={today} className="input" />
+      </div>
+      <div className="sm:col-span-2">
+        <label className="label" htmlFor="narration">Description</label>
+        <input id="narration" name="narration" placeholder="e.g. Transfer ref 123456, approved by Exco" className="input" required />
+      </div>
+      <div className="sm:col-span-2">
+        <button className="btn-secondary" disabled={pending}>{pending ? "Saving…" : "Record transaction"}</button>
+      </div>
+    </form>
+  );
+}
+
+export function ReverseForm({ action }: { action: Action }) {
+  const [state, formAction, pending] = useActionState(action, {});
+  if (state.success) return <span className="text-xs text-emerald-700">{state.success}</span>;
+  return (
+    <details>
+      <summary className="cursor-pointer text-xs text-slate-500 hover:underline">Reverse</summary>
+      <form action={formAction} className="mt-1 flex w-56 flex-col gap-1">
+        <input name="reason" placeholder="Reason" className="input py-1 text-xs" required />
+        <button className="btn-danger px-2 py-1 text-xs" disabled={pending}>Reverse transaction</button>
+        {state.error && <span className="text-xs text-red-700">{state.error}</span>}
+      </form>
+    </details>
+  );
+}

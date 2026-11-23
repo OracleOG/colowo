@@ -27,6 +27,8 @@ const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a valid date");
 export const memberInputSchema = z.object({
   fullName: z.string().trim().min(3, "Enter the member's full name").max(200).transform(cleanName),
   employeeNo: optionalText(50).transform(normalizeEmployeeNo),
+  verificationNo: optionalText(50).transform(normalizeEmployeeNo),
+  fileNo: optionalText(50),
   phone: optionalText(30).transform((v, ctx) => {
     const p = normalizePhone(v);
     if (p === undefined) {

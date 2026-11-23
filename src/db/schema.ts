@@ -12,11 +12,14 @@
  */
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   bigserial,
   bigint,
   boolean,
   check,
+  customType,
   date,
+  numeric,
   index,
   integer,
   jsonb,
@@ -53,8 +56,12 @@ export const members = pgTable(
     id: bigserial("id", { mode: "number" }).primaryKey(),
     /** Canonical, system-generated, immutable (enforced by trigger). */
     memberNo: text("member_no").notNull().unique(),
-    /** Number the bank/employer uses on the deduction file. */
+    /** Payroll EMPLOYMENT NUMBER on the bank file (e.g. EMP0013145) — the import match key. */
     employeeNo: text("employee_no"),
+    /** Payroll VERIFICATION NO on the bank file — used to suggest matches. */
+    verificationNo: text("verification_no"),
+    /** Personnel file number used in the old general deduction record (e.g. SP/956). */
+    fileNo: text("file_no"),
     fullName: text("full_name").notNull(),
     phone: text("phone"),
     email: text("email"),
@@ -172,6 +179,175 @@ export const auditLog = pgTable(
   ],
 );
 
+/* ------------------------------------------------------------------ */
+/* Stored files (uploaded bank files, kept privately in the database)   */
+/* ------------------------------------------------------------------ */
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" });
+
+export const storedFiles = pgTable("stored_files", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  sha256: text("sha256").notNull(),
+  fileName: text("file_name").notNull(),
+  contentType: text("content_type").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  content: bytea("content").notNull(),
+  uploadedBy: bigint("uploaded_by", { mode: "number" }).references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/* ------------------------------------------------------------------ */
+/* Deduction imports                                                   */
+/* ------------------------------------------------------------------ */
+
+export const importBatchStatus = pgEnum("import_batch_status", ["in_review", "committed", "cancelled"]);
+export const importRowStatus = pgEnum("import_row_status", ["ok", "warning", "error"]);
+export const importRowResolution = pgEnum("import_row_resolution", ["none", "corrected", "skipped"]);
+
+/** Accounting period "YYYY-MM". */
+const period = (name: string) => text(name);
+const periodCheck = (name: string, col: string) => check(name, sql.raw(`${col} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`));
+
+export const importBatches = pgTable(
+  "import_batches",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    period: period("period").notNull(),
+    format: text("format").notNull(),
+    fileId: bigint("file_id", { mode: "number" }).notNull().references(() => storedFiles.id),
+    fileName: text("file_name").notNull(),
+    fileHash: text("file_hash").notNull(),
+    status: importBatchStatus("status").notNull().default("in_review"),
+    /** Period text found inside the file, e.g. "May 2026". */
+    filePeriodLabel: text("file_period_label"),
+    /** Problems with the file as a whole; commit is blocked while any exist. */
+    structureErrors: jsonb("structure_errors").$type<string[]>().notNull().default([]),
+    /** Informative notes about the file (not blocking). */
+    notices: jsonb("notices").$type<string[]>().notNull().default([]),
+    controlCount: integer("control_count"),
+    controlTotalKobo: bigint("control_total_kobo", { mode: "number" }),
+    parsedCount: integer("parsed_count").notNull(),
+    parsedTotalKobo: bigint("parsed_total_kobo", { mode: "number" }).notNull(),
+    postedCount: integer("posted_count").notNull().default(0),
+    postedTotalKobo: bigint("posted_total_kobo", { mode: "number" }).notNull().default(0),
+    uploadedBy: bigint("uploaded_by", { mode: "number" }).references(() => users.id),
+    committedBy: bigint("committed_by", { mode: "number" }).references(() => users.id),
+    committedAt: timestamp("committed_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [
+    periodCheck("import_batches_period_chk", "period"),
+    // The same file can never be committed twice (but a cancelled one can be re-uploaded).
+    uniqueIndex("import_batches_hash_committed_uq").on(t.fileHash).where(sql`status = 'committed'`),
+    index("import_batches_period_idx").on(t.period),
+  ],
+);
+
+export const importRows = pgTable(
+  "import_rows",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    batchId: bigint("batch_id", { mode: "number" })
+      .notNull()
+      .references(() => importBatches.id),
+    rowNumber: integer("row_number").notNull(),
+    raw: jsonb("raw").notNull(),
+    section: text("section"),
+    employmentNoRaw: text("employment_no_raw"),
+    verificationNoRaw: text("verification_no_raw"),
+    nameRaw: text("name_raw"),
+    amountRaw: text("amount_raw"),
+    ytdKobo: bigint("ytd_kobo", { mode: "number" }),
+    /** Effective values after any correction by an officer. */
+    employmentNo: text("employment_no"),
+    amountKobo: bigint("amount_kobo", { mode: "number" }),
+    memberId: bigint("member_id", { mode: "number" }).references(() => members.id),
+    suggestedMemberId: bigint("suggested_member_id", { mode: "number" }).references(() => members.id),
+    status: importRowStatus("status").notNull(),
+    errorCode: text("error_code"),
+    warnings: jsonb("warnings").$type<string[]>().notNull().default([]),
+    message: text("message"),
+    resolution: importRowResolution("resolution").notNull().default("none"),
+    resolvedBy: bigint("resolved_by", { mode: "number" }).references(() => users.id),
+    note: text("note"),
+    postedAt: timestamp("posted_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [
+    index("import_rows_batch_idx").on(t.batchId),
+    uniqueIndex("import_rows_batch_row_uq").on(t.batchId, t.rowNumber),
+  ],
+);
+
+/* ------------------------------------------------------------------ */
+/* Savings ledger (append-only, enforced by trigger)                    */
+/* ------------------------------------------------------------------ */
+
+export const savingsTxnType = pgEnum("savings_txn_type", [
+  "contribution",
+  "withdrawal",
+  "adjustment",
+  "reversal",
+  "migrated_opening",
+]);
+export const txnSource = pgEnum("txn_source", ["import", "manual", "migration", "seed"]);
+
+export const savingsTransactions = pgTable(
+  "savings_transactions",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    memberId: bigint("member_id", { mode: "number" })
+      .notNull()
+      .references(() => members.id),
+    /** Month the money belongs to (drives balances and earnings). */
+    period: period("period").notNull(),
+    txnDate: date("txn_date", { mode: "string" }).notNull(),
+    type: savingsTxnType("type").notNull(),
+    /** Signed: credits positive, debits negative. */
+    amountKobo: bigint("amount_kobo", { mode: "number" }).notNull(),
+    source: txnSource("source").notNull(),
+    batchId: bigint("batch_id", { mode: "number" }).references(() => importBatches.id),
+    importRowId: bigint("import_row_id", { mode: "number" })
+      .unique()
+      .references(() => importRows.id),
+    /** "memberId:period" for contributions from bank files — at most one per member per month. */
+    importKey: text("import_key").unique(),
+    reversesId: bigint("reverses_id", { mode: "number" })
+      .unique()
+      .references((): AnyPgColumn => savingsTransactions.id),
+    narration: text("narration"),
+    createdBy: bigint("created_by", { mode: "number" }).references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    periodCheck("savings_period_chk", "period"),
+    index("savings_member_period_idx").on(t.memberId, t.period),
+    check("savings_amount_nonzero_chk", sql`amount_kobo <> 0`),
+    check(
+      "savings_sign_chk",
+      sql`(type <> 'contribution' or amount_kobo > 0) and (type <> 'withdrawal' or amount_kobo < 0)`,
+    ),
+    check("savings_reversal_link_chk", sql`(type = 'reversal') = (reverses_id is not null)`),
+    check("savings_import_source_chk", sql`(import_key is null) or (source = 'import' and batch_id is not null)`),
+  ],
+);
+
+/** Monthly earnings rate in force from a period onward (e.g. 2022-01 → 0.005). */
+export const earningRates = pgTable(
+  "earning_rates",
+  {
+    effectiveFrom: period("effective_from").primaryKey(),
+    monthlyRate: numeric("monthly_rate", { precision: 9, scale: 6 }).notNull(),
+    note: text("note"),
+    createdBy: bigint("created_by", { mode: "number" }).references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  () => [periodCheck("earning_rates_period_chk", "effective_from")],
+);
+
 export type Member = typeof members.$inferSelect;
+export type ImportBatch = typeof importBatches.$inferSelect;
+export type ImportRow = typeof importRows.$inferSelect;
+export type SavingsTxn = typeof savingsTransactions.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type AuditEntry = typeof auditLog.$inferSelect;

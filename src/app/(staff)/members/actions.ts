@@ -6,6 +6,8 @@ import type { Member } from "@/db/schema";
 import { actorFor, requirePermission } from "@/server/auth/session";
 import { createMemberLogin } from "@/server/auth/users";
 import { DomainError } from "@/server/errors";
+import { parseAmountToKobo } from "@/lib/money";
+import { recordManualEntry, reverseSavingsTransaction } from "@/server/savings/ledger";
 import {
   changeMemberStatus,
   createMember,
@@ -28,6 +30,8 @@ function readMemberForm(form: FormData): MemberInput {
   return {
     fullName: v("fullName"),
     employeeNo: v("employeeNo"),
+    verificationNo: v("verificationNo"),
+    fileNo: v("fileNo"),
     phone: v("phone"),
     email: v("email"),
     dateJoined: v("dateJoined"),
@@ -72,7 +76,7 @@ export async function updateMemberAction(id: number, prev: MemberFormState, form
   return { attempt: prev.attempt + 1, success: "Changes saved." };
 }
 
-export type SimpleState = { error?: string; success?: string };
+export type SimpleState = { error?: string; success?: string; /** changes on each success, to reset forms */ at?: number };
 
 export async function changeStatusAction(id: number, _: SimpleState, form: FormData): Promise<SimpleState> {
   const user = await requirePermission("member.manage");
@@ -100,4 +104,40 @@ export async function createLoginAction(id: number, _: SimpleState, form: FormDa
   }
   revalidatePath(`/members/${id}`);
   return { success: "Login created. Give the member their member number and temporary password." };
+}
+
+export async function manualEntryAction(memberId: number, _: SimpleState, form: FormData): Promise<SimpleState> {
+  const type = String(form.get("type")) as "contribution" | "withdrawal" | "adjustment_credit" | "adjustment_debit";
+  const isAdjustment = type.startsWith("adjustment");
+  const user = await requirePermission(isAdjustment ? "ledger.adjust" : "ledger.manual_entry");
+  const amount = parseAmountToKobo(String(form.get("amount") ?? ""));
+  if (!amount.ok) return { error: "Enter a valid amount." };
+  try {
+    await recordManualEntry(await actorFor(user), {
+      memberId,
+      type: isAdjustment ? "adjustment" : (type as "contribution" | "withdrawal"),
+      direction: type === "adjustment_debit" ? "debit" : "credit",
+      amountKobo: amount.kobo,
+      period: String(form.get("period") ?? ""),
+      txnDate: String(form.get("txnDate") ?? "") || undefined,
+      narration: String(form.get("narration") ?? ""),
+    });
+  } catch (e) {
+    if (e instanceof DomainError) return { error: e.message };
+    throw e;
+  }
+  revalidatePath(`/members/${memberId}`);
+  return { success: "Recorded.", at: Date.now() };
+}
+
+export async function reverseTxnAction(memberId: number, txnId: number, _: SimpleState, form: FormData): Promise<SimpleState> {
+  const user = await requirePermission("ledger.adjust");
+  try {
+    await reverseSavingsTransaction(await actorFor(user), txnId, String(form.get("reason") ?? ""));
+  } catch (e) {
+    if (e instanceof DomainError) return { error: e.message };
+    throw e;
+  }
+  revalidatePath(`/members/${memberId}`);
+  return { success: "Reversed." };
 }

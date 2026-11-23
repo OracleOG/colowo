@@ -26,6 +26,16 @@ Demo logins after seeding:
 | board@colowo.local | Colowo!2026 | Viewer |
 | CLW00001 | Member!2026 | Member (must change password) |
 
+### Try a bank import
+
+```bash
+npm run demo:bank-file -- 2026-10 ./october-2026.xlsx
+```
+
+This writes a payroll file in the bank's layout from the seeded members, with a few
+deliberate problems (unknown number, blank amount, duplicate, exited member, unusual
+amount). Upload it at **Deduction imports → Upload bank file** as the finance officer.
+
 ## Tests
 
 Tests run against a separate database (`TEST_DATABASE_URL`, default
