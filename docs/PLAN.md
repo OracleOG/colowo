@@ -35,7 +35,8 @@ How Colowo replaces each step:
 | Yearly totals/summary | Savings report + passbook view per year (Milestones 3, 6) |
 | Loan workbook | Loan accounts + loan ledger + approvals (Milestone 4) |
 
-The real workbooks will be reviewed before the ledger schema is finalised (to be supplied).
+The sample workbook has been analysed — see [`DATA_DESIGN.md`](DATA_DESIGN.md) for the confirmed rules,
+the ledger schema, the bank-file import logic, migration plan and data problems found.
 
 ## Milestones
 
@@ -58,11 +59,9 @@ The real workbooks will be reviewed before the ledger schema is finalised (to be
 
 ## Open questions for the cooperative
 
-**Blocking Milestone 2–3 (need answers or files):**
-1. Sample bank deduction file — exact columns, header rows, one total per member or savings/loan split?
-2. The general deduction, personal deduction and loan workbooks.
-3. How is interest on the personal sheets calculated (rate, monthly vs yearly, on what balance)?
-4. Loan interest: flat or reducing balance? Rate, tenure, how the monthly repayment is set.
+Answered by the sample workbook: bank file format (Kaduna State Payroll, one amount per member),
+savings interest rule (0.42%/0.5% monthly, compounding within the year) and yearly payout %.
+Remaining questions are in [`DATA_DESIGN.md` §6](DATA_DESIGN.md#6-questions-this-raises-for-the-cooperative).
 
 **Can stay configurable for now:** member number format (currently `CLW00001`), exit/settlement rules,
 whether exited members can rejoin (currently: no), withdrawal rules, suspended-member deductions,
