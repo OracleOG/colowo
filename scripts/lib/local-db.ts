@@ -10,12 +10,14 @@ import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { config } from "dotenv";
+import { databaseConfigError } from "../../src/db/config";
 
 const DATA_DIR = path.resolve(".data");
 const PG_DIR = path.join(DATA_DIR, "postgres");
 const SECRET_FILE = path.join(DATA_DIR, "session-secret");
 const PORT = Number(process.env.LOCAL_DB_PORT ?? 54329);
-const LOCAL_URL = `postgres://postgres:postgres@localhost:${PORT}/colowo`;
+// 127.0.0.1 rather than "localhost": on some systems (e.g. WSL) localhost resolves to IPv6 first.
+const LOCAL_URL = `postgres://postgres:postgres@127.0.0.1:${PORT}/colowo`;
 
 type Embedded = import("embedded-postgres").default;
 
@@ -25,14 +27,8 @@ export function loadEnv() {
 
 /** True when no real database has been configured. */
 export function wantsLocalDatabase(): boolean {
-  const url = process.env.DATABASE_URL?.trim();
-  if (!url) return true;
-  try {
-    const host = new URL(url).hostname;
-    return host === "host" || host === ""; // placeholder from .env.example
-  } catch {
-    return true;
-  }
+  // Missing, placeholder or malformed DATABASE_URL → use the built-in database.
+  return databaseConfigError(process.env.DATABASE_URL) !== null;
 }
 
 function pidAlive(pid: number): boolean {
