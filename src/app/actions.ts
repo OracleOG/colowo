@@ -15,7 +15,15 @@ export async function loginAction(_: FormState, form: FormData): Promise<FormSta
   const password = String(form.get("password") ?? "");
   if (!login || !password) return { error: "Enter your login and password." };
 
-  const result = await attemptLogin(login, password, await clientIp());
+  let result;
+  try {
+    result = await attemptLogin(login, password, await clientIp());
+  } catch (err) {
+    // Most likely the database isn't running or configured: say so on the screen.
+    const cause = (err as { cause?: Error })?.cause ?? err;
+    console.error(err);
+    return { error: `Can't reach the database. ${cause instanceof Error ? cause.message : ""}` };
+  }
   if (!result.ok) {
     return {
       error:
