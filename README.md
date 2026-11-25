@@ -7,34 +7,41 @@ See [`docs/PLAN.md`](docs/PLAN.md) for decisions, milestones and open questions.
 
 ## Run locally
 
-Requires Node 20+ and PostgreSQL 15+.
+Requires **Node.js 20+** and Git. No database to install or sign up for.
 
 ```bash
+git clone -b milestone-1-foundation https://github.com/OracleOG/colowo.git
+cd colowo
 npm install
-cp .env.example .env.local   # then set DATABASE_URL and SESSION_SECRET
-npm run db:migrate
-npm run db:seed              # demo logins + ~520 fake members (never in production)
 npm run dev
 ```
 
-Demo logins after seeding:
+The first `npm run dev` takes about a minute: it starts a built-in PostgreSQL
+server (data kept in `.data/postgres`), creates the tables, loads demo data
+(~520 fake members with savings history) and writes a demo bank file to
+`demo-files/`. After that it starts in seconds and keeps your data.
+Open **http://localhost:3000**. Stop with **Ctrl+C**.
 
 | Login | Password | Role |
 |---|---|---|
-| admin@colowo.local | Colowo!2026 | Admin |
-| finance@colowo.local | Colowo!2026 | Finance officer |
+| finance@colowo.local | Colowo!2026 | Finance officer (imports) |
+| admin@colowo.local | Colowo!2026 | Admin (everything) |
 | board@colowo.local | Colowo!2026 | Viewer |
 | CLW00001 | Member!2026 | Member (must change password) |
 
-### Try a bank import
+**Try an import:** sign in as the finance officer → *Deduction imports* → *Upload bank file* →
+month **October 2026** → `demo-files/bank-file-october-2026.xlsx`. It contains a few deliberate
+problems (unknown number, blank amount, duplicate, exited member, unusual amount).
 
-```bash
-npm run demo:bank-file -- 2026-10 ./october-2026.xlsx
-```
+Useful commands:
 
-This writes a payroll file in the bank's layout from the seeded members, with a few
-deliberate problems (unknown number, blank amount, duplicate, exited member, unusual
-amount). Upload it at **Deduction imports → Upload bank file** as the finance officer.
+| Command | What it does |
+|---|---|
+| `npm run db:reset` | Delete the local database and demo files; next `npm run dev` starts fresh |
+| `npm run demo:bank-file -- 2026-11 demo-files/nov.xlsx` | Make another demo bank file (stop `npm run dev` first) |
+
+To use your own Postgres (e.g. Neon) instead of the built-in one, put
+`DATABASE_URL=...` in `.env.local`. The built-in database can't run as the root user.
 
 ## Tests
 
@@ -49,7 +56,7 @@ npm test
 
 1. Create a Neon project; copy the **pooled** connection string.
 2. Import the repo in Vercel; set `DATABASE_URL`, `SESSION_SECRET` (`openssl rand -base64 48`) and `MEMBER_NO_PREFIX`.
-3. Run `npm run db:migrate` against the Neon database (locally with its URL in `.env.local`, or from CI).
+3. Run `npm run db:migrate` with Neon's URL as `DATABASE_URL` in `.env.local`, to create the tables there.
 4. Create the first admin with a one-off script — do not run the demo seed in production.
 
 ## Layout
