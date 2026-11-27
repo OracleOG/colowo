@@ -47,7 +47,9 @@ the ledger schema, the bank-file import logic, migration plan and data problems 
 3. **Savings ledger — done:** append-only ledger with DB-enforced reversals, manual contributions/withdrawals/
    adjustments, yearly passbook with earnings (matches the cooperative's sheet to the kobo), member self-view.
    Still to do: PDF statement.
-4. Loans.
+4. **Loans** (see [`LOANS.md`](LOANS.md)): phase 1 done — schemes, general requests, applications, offers
+   with revisions, member responses on phone or by an officer on their behalf. Next: payout list
+   export/upload, loan ledger, repayments.
 5. Interest runs.
 6. Reports + Excel/PDF export.
 7. Historical migration from the workbooks.

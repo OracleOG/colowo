@@ -18,6 +18,43 @@ import { changeMemberStatus, createMember } from "../../src/server/members";
 
 export { pool };
 
+/** A demo loan scheme and a few applications in different states, if there are none. */
+export async function seedDemoLoans() {
+  const { loanApplications } = await import("../../src/db/schema");
+  const [{ n }] = await db.select({ n: count() }).from(loanApplications);
+  if (n > 0) return;
+  const { applyForLoan, createScheme, makeOffer, respondToOffer } = await import("../../src/server/loans/applications");
+  const { DEFAULT_ROLES } = await import("../../src/lib/permissions");
+  const { todayLagos } = await import("../../src/lib/format");
+  const [approverUser] = await db.select().from(users).where(eq(users.login, "approver@colowo.local"));
+  const [officerUser] = await db.select().from(users).where(eq(users.login, "loans@colowo.local"));
+  const approver = { userId: approverUser.id, memberId: null, permissions: new Set(DEFAULT_ROLES.loan_approver.permissions) };
+  const officer = { userId: officerUser.id, memberId: null, permissions: new Set(DEFAULT_ROLES.loan_officer.permissions) };
+  const scheme = await createScheme(approver, {
+    name: "December special loan",
+    type: "special",
+    description: "End-of-year loan. Repaid through payroll from February.",
+    poolKobo: 20_000_000_00,
+    maxPerMemberKobo: 300_000_00,
+    defaultRatePercent: "10",
+    defaultTenureMonths: 10,
+    opensOn: todayLagos(),
+  });
+  const people = await db.select().from(members).where(eq(members.status, "active")).orderBy(members.id).limit(8);
+  const next = addMonths(todayLagos().slice(0, 7), 1);
+  // CLW00001 (the demo member login) gets an offer to answer on their phone.
+  const a1 = await applyForLoan(officer, { memberId: people[0].id, loanType: "regular", requestedKobo: 200_000_00, purpose: "School fees" });
+  await makeOffer(approver, a1.id, { amountKobo: 100_000_00, ratePercent: "10", tenureMonths: 10, firstRepaymentPeriod: next, conditions: "Guarantor form required before payment" });
+  await applyForLoan(officer, { memberId: people[1].id, schemeId: scheme.id, requestedKobo: 300_000_00, purpose: "Shop stock" });
+  await applyForLoan(officer, { memberId: people[2].id, loanType: "commodity", requestedKobo: 45_000_00, purpose: "Rice and cooking oil" });
+  const a4 = await applyForLoan(officer, { memberId: people[3].id, schemeId: scheme.id, requestedKobo: 150_000_00, purpose: "Rent" });
+  await makeOffer(approver, a4.id, { amountKobo: 150_000_00, ratePercent: "10", tenureMonths: 10, firstRepaymentPeriod: next });
+  await respondToOffer(officer, a4.id, { response: "accepted", note: "Signed at the office" });
+  const a5 = await applyForLoan(officer, { memberId: people[4].id, loanType: "regular", requestedKobo: 250_000_00, purpose: "Medical bills" });
+  await makeOffer(approver, a5.id, { amountKobo: 150_000_00, ratePercent: "10", tenureMonths: 10, firstRepaymentPeriod: next });
+  await respondToOffer(officer, a5.id, { response: "adjustment_requested", note: "Member asks for ₦200,000 over 12 months" });
+}
+
 export async function runMigrations() {
   await migrate(db, { migrationsFolder: path.resolve("drizzle") });
 }
@@ -27,22 +64,28 @@ export async function memberCount(): Promise<number> {
   return n;
 }
 
-/** Demo data: roles, three staff logins, ~520 members with savings history. Skips what exists. */
-export async function seedDemo(log: (s: string) => void = console.log) {
-  if (process.env.NODE_ENV === "production") throw new Error("Refusing to seed demo data in production");
+export const DEMO_STAFF = [
+  { login: "admin@colowo.local", displayName: "Demo Admin", roleCodes: ["admin"], what: "everything" },
+  { login: "finance@colowo.local", displayName: "Demo Finance Officer", roleCodes: ["finance_officer"], what: "imports, savings" },
+  { login: "loans@colowo.local", displayName: "Demo Loan Officer", roleCodes: ["loan_officer"], what: "loans for members" },
+  { login: "approver@colowo.local", displayName: "Demo Loan Approver", roleCodes: ["loan_approver"], what: "loan offers, schemes" },
+  { login: "board@colowo.local", displayName: "Demo Board Viewer", roleCodes: ["viewer"], what: "read-only" },
+];
 
+/** Roles/permissions are kept in step with the code, and demo staff logins exist. Safe on every start. */
+export async function ensureRolesAndDemoStaff() {
   await db.transaction((tx) => syncRolesAndPermissions(tx));
-
-  const staff = [
-    { login: "admin@colowo.local", displayName: "Demo Admin", roleCodes: ["admin"] },
-    { login: "finance@colowo.local", displayName: "Demo Finance Officer", roleCodes: ["finance_officer"] },
-    { login: "board@colowo.local", displayName: "Demo Board Viewer", roleCodes: ["viewer"] },
-  ];
-  for (const s of staff) {
+  if (process.env.NODE_ENV === "production") return;
+  for (const { what: _what, ...s } of DEMO_STAFF) {
     const [exists] = await db.select().from(users).where(eq(users.login, s.login));
     if (!exists) await createUser(SYSTEM, { ...s, password: "Colowo!2026", mustChangePassword: false });
   }
+}
 
+/** Demo data: roles, staff logins, ~520 members with savings history. Skips what exists. */
+export async function seedDemo(log: (s: string) => void = console.log) {
+  if (process.env.NODE_ENV === "production") throw new Error("Refusing to seed demo data in production");
+  await ensureRolesAndDemoStaff();
   if ((await memberCount()) > 0) return;
 
   faker.seed(2026);

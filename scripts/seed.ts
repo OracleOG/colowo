@@ -8,6 +8,7 @@ withDatabase(async () => {
   const tasks = await import("./lib/tasks");
   await tasks.runMigrations();
   await tasks.seedDemo();
+  await tasks.seedDemoLoans();
   await tasks.pool.end();
   console.log("Demo data loaded.");
 }).catch((err) => {

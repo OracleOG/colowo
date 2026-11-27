@@ -22,7 +22,26 @@ const SOURCE_LABEL: Record<SavingsTxn["source"], string> = {
 export function Passbook({ years }: { years: PassbookYear[] }) {
   if (!years.length) return <p className="text-sm text-slate-500">No savings recorded yet.</p>;
   return (
-    <div className="overflow-x-auto">
+    <div>
+      {/* Phones: one card per year */}
+      <ul className="space-y-3 sm:hidden">
+        {years.map((y) => (
+          <li key={y.year} className="rounded-md border border-slate-200 p-3">
+            <div className="flex items-baseline justify-between">
+              <span className="font-semibold">{y.year}</span>
+              <span className="text-lg font-semibold">{formatKobo(y.closingKobo)}</span>
+            </div>
+            <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
+              <dt className="text-slate-500">Opening</dt><dd className="text-right">{formatKobo(y.openingKobo)}</dd>
+              <dt className="text-slate-500">Contributions</dt><dd className="text-right">{formatKobo(y.contributionsKobo)}</dd>
+              {y.withdrawalsKobo !== 0 && (<><dt className="text-slate-500">Withdrawals</dt><dd className="text-right">{formatKobo(y.withdrawalsKobo)}</dd></>)}
+              {y.adjustmentsKobo !== 0 && (<><dt className="text-slate-500">Adjustments</dt><dd className="text-right">{formatKobo(y.adjustmentsKobo)}</dd></>)}
+              <dt className="text-slate-500">Earnings{y.inProgress ? " (to date)" : ""}</dt><dd className="text-right">{formatKobo(y.earningsKobo)}</dd>
+            </dl>
+          </li>
+        ))}
+      </ul>
+      <div className="hidden overflow-x-auto sm:block">
       <table className="table">
         <thead>
           <tr>
@@ -52,6 +71,7 @@ export function Passbook({ years }: { years: PassbookYear[] }) {
           ))}
         </tbody>
       </table>
+      </div>
       <p className="mt-2 text-xs text-slate-500">
         Earnings follow the cooperative&apos;s rule: monthly interest on the running balance, restarting from savings each January.
         They are not added to the savings balance. The amount actually paid each year is a percentage the cooperative sets.

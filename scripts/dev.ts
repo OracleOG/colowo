@@ -28,10 +28,12 @@ async function main() {
   const tasks = await import("./lib/tasks");
   await tasks.runMigrations();
   console.log("• Database up to date");
+  await tasks.ensureRolesAndDemoStaff();
   if ((await tasks.memberCount()) === 0) {
     console.log("• Loading demo data (first run only, about a minute)…");
     await tasks.seedDemo((s) => console.log(s));
   }
+  await tasks.seedDemoLoans();
   const demoFile = path.join("demo-files", "bank-file-october-2026.xlsx");
   if (!existsSync(demoFile)) await tasks.writeDemoBankFile("2026-10", demoFile);
   await tasks.pool.end();
@@ -39,9 +41,9 @@ async function main() {
   console.log(`
   Colowo is starting on http://localhost:3000
 
-  Staff:   finance@colowo.local / Colowo!2026   (imports)
-           admin@colowo.local   / Colowo!2026   (everything)
-  Member:  CLW00001             / Member!2026   (asks for a new password)
+  Staff (password Colowo!2026):
+${tasks.DEMO_STAFF.map((s) => `           ${s.login.padEnd(24)} ${s.what}`).join("\n")}
+  Member:  CLW00001 / Member!2026  (asks for a new password; has a loan offer waiting)
 
   Demo bank file to upload: ${demoFile}  (choose October 2026)
   Press Ctrl+C to stop.

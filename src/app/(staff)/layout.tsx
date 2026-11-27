@@ -11,6 +11,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
   const nav = [
     { href: "/members", label: "Members", show: user.permissions.has("member.view") },
     { href: "/imports", label: "Deduction imports", show: user.permissions.has("import.upload") },
+    { href: "/loans", label: "Loans", show: user.permissions.has("loan.manage") || user.permissions.has("loan.approve") },
     { href: "/audit", label: "Audit log", show: user.permissions.has("audit.view") },
   ].filter((n) => n.show);
 

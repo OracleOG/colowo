@@ -24,10 +24,12 @@ Open **http://localhost:3000**. Stop with **Ctrl+C**.
 
 | Login | Password | Role |
 |---|---|---|
-| finance@colowo.local | Colowo!2026 | Finance officer (imports) |
 | admin@colowo.local | Colowo!2026 | Admin (everything) |
+| finance@colowo.local | Colowo!2026 | Finance officer (imports, savings) |
+| loans@colowo.local | Colowo!2026 | Loan officer (loans on members' behalf) |
+| approver@colowo.local | Colowo!2026 | Loan approver (offers, schemes) |
 | board@colowo.local | Colowo!2026 | Viewer |
-| CLW00001 | Member!2026 | Member (must change password) |
+| CLW00001 | Member!2026 | Member (must change password; has a loan offer waiting) |
 
 **Try an import:** sign in as the finance officer → *Deduction imports* → *Upload bank file* →
 month **October 2026** → `demo-files/bank-file-october-2026.xlsx`. It contains a few deliberate

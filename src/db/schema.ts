@@ -351,3 +351,118 @@ export type ImportRow = typeof importRows.$inferSelect;
 export type SavingsTxn = typeof savingsTransactions.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type AuditEntry = typeof auditLog.$inferSelect;
+
+/* ------------------------------------------------------------------ */
+/* Loans — schemes, applications, offers (see docs/LOANS.md)            */
+/* ------------------------------------------------------------------ */
+
+export const loanType = pgEnum("loan_type", ["regular", "commodity", "special"]);
+export const loanSchemeStatus = pgEnum("loan_scheme_status", ["open", "closed"]);
+export const loanApplicationStatus = pgEnum("loan_application_status", [
+  "submitted",
+  "offered",
+  "adjustment_requested",
+  "accepted",
+  "declined",
+  "rejected",
+  "cancelled",
+  "disbursed",
+]);
+export const loanOfferResponse = pgEnum("loan_offer_response", ["accepted", "declined", "adjustment_requested"]);
+
+/** A loan round the cooperative advertises ("December special loan"). Loans can also be general requests with no scheme. */
+export const loanSchemes = pgTable("loan_schemes", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  name: text("name").notNull(),
+  type: loanType("type").notNull(),
+  description: text("description"),
+  poolKobo: bigint("pool_kobo", { mode: "number" }),
+  maxPerMemberKobo: bigint("max_per_member_kobo", { mode: "number" }),
+  /** Flat interest for the whole loan, in percent (e.g. "10.000"). [CONFIRM] */
+  defaultRatePercent: numeric("default_rate_percent", { precision: 7, scale: 3 }).notNull(),
+  defaultTenureMonths: integer("default_tenure_months").notNull(),
+  opensOn: date("opens_on", { mode: "string" }).notNull(),
+  closesOn: date("closes_on", { mode: "string" }),
+  status: loanSchemeStatus("status").notNull().default("open"),
+  createdBy: bigint("created_by", { mode: "number" }).references(() => users.id),
+  ...timestamps,
+});
+
+export const loanApplications = pgTable(
+  "loan_applications",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    memberId: bigint("member_id", { mode: "number" })
+      .notNull()
+      .references(() => members.id),
+    /** Null for a general loan request. */
+    schemeId: bigint("scheme_id", { mode: "number" }).references(() => loanSchemes.id),
+    loanType: loanType("loan_type").notNull(),
+    requestedKobo: bigint("requested_kobo", { mode: "number" }).notNull(),
+    purpose: text("purpose").notNull(),
+    preferredTenureMonths: integer("preferred_tenure_months"),
+    status: loanApplicationStatus("status").notNull().default("submitted"),
+    /** Who typed it in: the member, or a staff user on their behalf. */
+    submittedBy: bigint("submitted_by", { mode: "number" }).references(() => users.id),
+    onBehalf: boolean("on_behalf").notNull().default(false),
+    ...timestamps,
+  },
+  (t) => [
+    index("loan_applications_member_idx").on(t.memberId),
+    index("loan_applications_status_idx").on(t.status),
+    check("loan_applications_amount_chk", sql`requested_kobo > 0`),
+  ],
+);
+
+export const loanOffers = pgTable(
+  "loan_offers",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    applicationId: bigint("application_id", { mode: "number" })
+      .notNull()
+      .references(() => loanApplications.id),
+    version: integer("version").notNull(),
+    amountKobo: bigint("amount_kobo", { mode: "number" }).notNull(),
+    ratePercent: numeric("rate_percent", { precision: 7, scale: 3 }).notNull(),
+    interestKobo: bigint("interest_kobo", { mode: "number" }).notNull(),
+    totalKobo: bigint("total_kobo", { mode: "number" }).notNull(),
+    tenureMonths: integer("tenure_months").notNull(),
+    instalmentKobo: bigint("instalment_kobo", { mode: "number" }).notNull(),
+    firstRepaymentPeriod: period("first_repayment_period").notNull(),
+    conditions: text("conditions"),
+    validUntil: date("valid_until", { mode: "string" }).notNull(),
+    offeredBy: bigint("offered_by", { mode: "number" }).references(() => users.id),
+    response: loanOfferResponse("response"),
+    responseNote: text("response_note"),
+    respondedBy: bigint("responded_by", { mode: "number" }).references(() => users.id),
+    respondedOnBehalf: boolean("responded_on_behalf"),
+    respondedAt: timestamp("responded_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("loan_offers_app_version_uq").on(t.applicationId, t.version),
+    periodCheck("loan_offers_first_period_chk", "first_repayment_period"),
+    check("loan_offers_amount_chk", sql`amount_kobo > 0 and tenure_months > 0 and total_kobo = amount_kobo + interest_kobo`),
+  ],
+);
+
+/** Timeline of everything that happened to an application (and who did it). */
+export const loanEvents = pgTable(
+  "loan_events",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    applicationId: bigint("application_id", { mode: "number" })
+      .notNull()
+      .references(() => loanApplications.id),
+    kind: text("kind").notNull(),
+    note: text("note"),
+    actorUserId: bigint("actor_user_id", { mode: "number" }).references(() => users.id),
+    onBehalf: boolean("on_behalf").notNull().default(false),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("loan_events_app_idx").on(t.applicationId)],
+);
+
+export type LoanScheme = typeof loanSchemes.$inferSelect;
+export type LoanApplication = typeof loanApplications.$inferSelect;
+export type LoanOffer = typeof loanOffers.$inferSelect;

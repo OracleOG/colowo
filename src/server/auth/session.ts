@@ -47,3 +47,8 @@ export async function clientIp(): Promise<string | null> {
 export async function actorFor(user: SessionUser): Promise<Actor> {
   return { userId: user.id, ip: await clientIp() };
 }
+
+/** Actor for loan rules, which depend on who the user is as a member and what they may do. */
+export async function loanActorFor(user: SessionUser): Promise<import("../loans/applications").LoanActor> {
+  return { ...(await actorFor(user)), memberId: user.memberId, permissions: user.permissions };
+}

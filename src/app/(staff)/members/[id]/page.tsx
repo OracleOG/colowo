@@ -11,6 +11,8 @@ import { Passbook, TransactionList } from "@/components/savings";
 import { getPassbook, getSavingsBalance, listSavingsTransactions } from "@/server/savings/ledger";
 import { changeStatusAction, createLoginAction, manualEntryAction, reverseTxnAction, updateMemberAction } from "../actions";
 import { MemberForm } from "../member-form";
+import { LOAN_TYPE_LABEL, LoanStatusBadge } from "@/components/loans";
+import { listApplications } from "@/server/loans/applications";
 import { LoginForm, ManualEntryForm, ReverseForm, StatusForm } from "./member-actions";
 
 export default async function MemberPage({
@@ -37,6 +39,8 @@ export default async function MemberPage({
     canSeeLedger ? listSavingsTransactions(id) : [],
   ]);
   const canAdjust = user.permissions.has("ledger.adjust");
+  const canSeeLoans = user.permissions.has("loan.manage") || user.permissions.has("loan.approve");
+  const loanApps = canSeeLoans ? await listApplications({ memberId: id }) : [];
 
   return (
     <>
@@ -75,7 +79,29 @@ export default async function MemberPage({
                   Earnings {passbook[0].year} to date: {formatKobo(passbook[0].earningsKobo)}
                 </p>
               )}
-              <p className="mt-3 text-sm text-slate-400">Loans: coming in the next milestone.</p>
+            </section>
+          )}
+
+          {canSeeLoans && (
+            <section className="card">
+              <h2 className="mb-3 font-semibold">Loans</h2>
+              {loanApps.length ? (
+                <ul className="space-y-2 text-sm">
+                  {loanApps.map(({ app, schemeName }) => (
+                    <li key={app.id} className="flex items-center justify-between gap-2">
+                      <Link href={`/loans/${app.id}`} className="hover:underline">
+                        #{app.id} {schemeName ?? LOAN_TYPE_LABEL[app.loanType]} · {formatKobo(app.requestedKobo)}
+                      </Link>
+                      <LoanStatusBadge status={app.status} />
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-slate-500">No loan applications.</p>
+              )}
+              {user.permissions.has("loan.manage") && member.status === "active" && (
+                <Link href={`/loans/new?member=${id}`} className="btn-secondary mt-3 w-full">New loan application</Link>
+              )}
             </section>
           )}
 

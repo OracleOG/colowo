@@ -31,8 +31,11 @@ An admin creates a **scheme** whenever there is money to lend:
 | Application window | open 1 Dec – close 15 Dec (or "always open" for the general loan) |
 | Notes / conditions | free text shown to members |
 
-Members see open schemes on their phone with an **Apply** button. A permanent
-"General loan" scheme covers ordinary requests.
+Members see open schemes on their phone with an **Apply** button.
+
+**Not every loan belongs to a scheme.** A member can always make a **general loan request**
+(regular or commodity) with no scheme attached; it goes through the same offer → agree →
+payout → repay steps.
 
 ## 2. Application, offer and agreement
 
@@ -44,8 +47,13 @@ submitted ──► offered ──► accepted ──► (payout)
    └─► cancelled (by member, any time before payout)
 ```
 
-**Application** (member on their phone, or an officer on their behalf):
-scheme, amount requested, purpose/description, preferred repayment period.
+**Application**: scheme (or general request + loan type), amount requested,
+purpose/description, preferred repayment period.
+
+**Self-service, with staff able to do everything for a member.** Members can do every
+member step themselves on their phone (apply, accept, decline, request adjustment,
+cancel). Many will still go to the office, so a loan officer can do each of those steps
+**on the member's behalf**; the record shows "by <officer> on behalf of <member>".
 
 **Offer** (approver, permission `loan.approve`): the approver sees an eligibility panel
 (savings balance, current loans and what's left on them, whether previous loans are
@@ -95,7 +103,7 @@ Three ways in, all landing in the loan ledger:
 |---|---|
 | **Payroll deduction** | The monthly bank file. Each member's single amount is split by the allocation rule — default: loan instalments due first, remainder to savings `[CONFIRM]`. |
 | **Repayment upload** | An Excel template (employment/member no., loan ref, amount, date, reference) for repayments outside payroll, or a separate loan file from the bank — same review/commit screen. |
-| **Manual entry** | Cash or transfer for one member. |
+| **Manual entry** | Cash or transfer for one member: amount, **the month it is for**, date received, reference. A member can make several repayments in the same month. |
 
 - A member can **stop or reduce savings to pay a loan faster**: that's a change to their
   payroll deduction; Colowo simply allocates whatever comes in.
@@ -115,18 +123,31 @@ Three ways in, all landing in the loan ledger:
   (accept / decline / request adjustment); each active loan — amount received, interest,
   total repayable, paid so far, **balance**, months left, next instalment; completed loans.
 
-## 6. Data model
+## 6. Roles (proposal — to confirm with the cooperative)
+
+| Role | Loans | Savings & imports | Members | Reports / audit |
+|---|---|---|---|---|
+| **Member** | Apply, respond to offers, cancel — own loans only | View own | View own | Own statements |
+| **Finance officer** | Apply/respond on a member's behalf, payouts, repayments | Imports, manual entries | View | Reports |
+| **Loan officer** | Apply/respond on a member's behalf, payouts, repayments | View | View | Reports |
+| **Loan approver** (e.g. loan committee) | Make offers, reject, manage schemes | View | View | Reports |
+| **Admin** | Everything | Everything incl. adjustments, reversals | Manage | Everything, audit log |
+| **Viewer** (board, auditor) | View | View | View | Reports, audit log |
+
+Rule regardless of role: nobody approves or makes an offer on their **own** application.
+
+## 7. Data model
 
 ```
 loan_schemes        id, name, type, description, pool_kobo?, max_per_member_kobo?, rate, interest_method,
                     default_tenure_months, opens_on, closes_on?, status open|closed, created_by
-loan_applications   id, member_id, scheme_id, requested_kobo, purpose, preferred_tenure_months,
+loan_applications   id, member_id, scheme_id (null = general request), loan_type, requested_kobo, purpose, preferred_tenure_months,
                     status submitted|offered|accepted|declined|rejected|cancelled|disbursed,
                     created_by (member or officer), timestamps
 loan_offers         id, application_id, version, amount_kobo, rate, interest_kobo, total_kobo,
                     tenure_months, instalment_kobo, first_repayment_period, conditions, valid_until,
                     offered_by, response accepted|declined|adjustment_requested|null, response_note, responded_at
-loan_messages       application_id, author, text            (adjustment requests, replies)
+loan_events         application_id, kind, note, actor, on_behalf    (timeline: applied, offered, adjustment asked, …)
 payout_batches      id, scheme_id?, status draft|exported|committed|cancelled, created_by, file refs
 payout_rows         batch_id, application_id, amount_paid_kobo, paid_on, reference, status, error_code
 loan_accounts       id, member_id, application_id, accepted_offer_id, principal_kobo, interest_kobo,
@@ -137,14 +158,15 @@ loan_transactions   id, loan_id, period, txn_date, type disbursement|interest|re
 members             + bank_name, account_number, account_name   (for payout lists) [CONFIRM]
 ```
 
-## 7. Build order
+## 8. Build order
 
-1. Schemes, applications, offers, member accept/decline/adjust — on phone and desktop.
+1. ✅ Schemes, applications, offers, member accept/decline/adjust/cancel — on phone and desktop;
+   staff can do every member step on the member's behalf.
 2. Payout list export → upload → commit; loan accounts and ledger.
 3. Repayments: manual, repayment upload, payroll allocation; completion and arrears.
 4. Member loan view, scheme/loan reports; savings statement for any period (PDF).
 
-## 8. Decisions needed from the cooperative
+## 9. Decisions needed from the cooperative
 
 1. Interest: flat and **added** at payout (as the personal sheet shows), or **deducted** from the
    amount paid out? Rates for regular and commodity loans?

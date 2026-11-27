@@ -11,8 +11,8 @@ export const PERMISSIONS = {
   "ledger.view": "View savings and loan ledgers",
   "ledger.manual_entry": "Record manual savings/loan transactions",
   "ledger.adjust": "Post adjustments and reversals",
-  "loan.manage": "Create loan applications and record disbursements",
-  "loan.approve": "Approve or reject loans",
+  "loan.manage": "Apply and respond to offers on a member's behalf; record payouts and repayments",
+  "loan.approve": "Make loan offers, reject applications, manage loan schemes",
   "interest.run": "Prepare interest runs",
   "interest.post": "Post or reverse interest runs",
   "report.view": "View and export reports",
@@ -45,6 +45,16 @@ export const DEFAULT_ROLES: Record<
       "loan.manage",
       "report.view",
     ],
+  },
+  loan_officer: {
+    name: "Loan officer",
+    description: "Handles loan applications, payouts and repayments for members",
+    permissions: ["member.view", "ledger.view", "loan.manage", "report.view"],
+  },
+  loan_approver: {
+    name: "Loan approver (loan committee)",
+    description: "Makes loan offers, rejects applications and manages loan schemes",
+    permissions: ["member.view", "ledger.view", "loan.approve", "report.view"],
   },
   admin: {
     name: "Admin",
